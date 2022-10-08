@@ -5,6 +5,7 @@
 #include <QBuffer>
 #include <QTextStream>
 
+//cria arquivo e coloca nele de 0 até 999 em string
 bool makeFile(QString path)
 {
     QFile file(path);
@@ -24,6 +25,7 @@ bool makeFile(QString path)
     return false;
 }
 
+//ponto de parada da leitura
 QByteArray getHeader()
 {
     QByteArray header;
@@ -31,7 +33,7 @@ QByteArray getHeader()
     return header;
 }
 
-
+//recebe o path do arquivo original e o do novo
 bool compressFile(QString originalFile, QString newFile)
 {
     QFile ofile(originalFile);
@@ -43,10 +45,14 @@ bool compressFile(QString originalFile, QString newFile)
     if(!nfile.open(QIODevice::WriteOnly)) return false;
     int size = 1024;
 
+    //enquanto o ofile não estiver no fim
     while(!ofile.atEnd())
     {
+        //vai lendo o arquivo no tamanho passado e joga no buffer.
         QByteArray buffer = ofile.read(size);
+        //a cada leitura, vai fazer a compressão e jogando no compressed.
         QByteArray compressed = qCompress(buffer, 9);
+        //vai jogando isso no nfile. A cada 1024 bytes é escrito um novo header.
         nfile.write(header);
         nfile.write(compressed);
     }
@@ -58,32 +64,34 @@ bool compressFile(QString originalFile, QString newFile)
     return true;
 }
 
-bool decompressFile(QString originalFile, QString newFile)
+bool decompressFile(QString compressedFile, QString newFile)
 {
-    QFile ofile(originalFile);
+    QFile cfile(compressedFile);
     QFile nfile(newFile);
     QByteArray header = getHeader();
     int size = 1024;
 
-    if(!ofile.open(QIODevice::ReadOnly)) return false;
+    if(!cfile.open(QIODevice::ReadOnly)) return false;
     if(!nfile.open(QIODevice::WriteOnly)) return false;
 
     //garantindo que o arquivo foi criado
-    QByteArray buffer = ofile.peek(size);
+    QByteArray buffer = cfile.peek(size);
     if(!buffer.startsWith(header))
     {
         qCritical() << "We did not create this file!";
-        ofile.close();
+        cfile.close();
         nfile.close();
         return false;
     }
 
     //achar posições do header
-    ofile.seek(header.length());
+    cfile.seek(header.length());
 
-    while(!ofile.atEnd())
+    while(!cfile.atEnd())
     {
-        buffer = ofile.peek(size);
+        //vai lendo o arquivo com o tamanho passado e jogando em buffer
+        buffer = cfile.peek(size);
+        //vai pegando o index de header
         qint64 index = buffer.indexOf(header);
         qDebug() << "Head found at: " << index;
 
@@ -92,14 +100,14 @@ bool decompressFile(QString originalFile, QString newFile)
             //achou um header
             qint64 maxbytes = index;
             qInfo() << "Reading: " << maxbytes;
-            buffer = ofile.read(maxbytes);
-            ofile.read(header.length());
+            buffer = cfile.read(maxbytes);
+            cfile.read(header.length());
         }
         else
         {
             //sem header
             qInfo() << "Read all, no header!";
-            buffer = ofile.readAll();
+            buffer = cfile.readAll();
         }
 
         QByteArray decompressed = qUncompress(buffer);
@@ -107,7 +115,7 @@ bool decompressFile(QString originalFile, QString newFile)
         nfile.flush();
     }
 
-    ofile.close();
+    cfile.close();
     nfile.close();
 
     return true;
